@@ -77,6 +77,7 @@ InviteDelegate {
     }
     
     func configureStorage() {
+        storageRef = Storage.storage().reference()
     }
     
     func configureRemoteConfig() {
@@ -125,13 +126,32 @@ InviteDelegate {
         let messageSnapshot = self.messages[indexPath.row]
         guard let message = messageSnapshot.value as? [String: String] else { return cell }
         let name = message[Constants.MessageFields.name] ?? ""
-        let text = message[Constants.MessageFields.text] ?? ""
-        cell.textLabel?.text = name + ": " + text
-        cell.imageView?.image = UIImage(named: "ic_account_circle")
-        if let photoURL = message[Constants.MessageFields.photoURL], let URL = URL(string: photoURL),
-            let data = try? Data(contentsOf: URL) {
-            cell.imageView?.image = UIImage(data: data)
+        if let imageURL = message[Constants.MessageFields.imageURL] {
+            if imageURL.hasPrefix("gs://") {
+                Storage.storage().reference(forURL: imageURL).getData(maxSize: INT64_MAX) {(data, error) in
+                    if let error = error {
+                        print("Error downloading: \(error)")
+                        return
+                    }
+                    DispatchQueue.main.async {
+                        cell.imageView?.image = UIImage.init(data: data!)
+                        cell.setNeedsLayout()
+                    }
+                }
+            } else if let URL = URL(string: imageURL), let data = try? Data(contentsOf: URL) {
+                cell.imageView?.image = UIImage.init(data: data)
+            }
+            cell.textLabel?.text = "sent by: \(name)"
+        } else {
+            let text = message[Constants.MessageFields.text] ?? ""
+            cell.textLabel?.text = name + ": " + text
+            cell.imageView?.image = UIImage(named: "ic_account_circle")
+            if let photoURL = message[Constants.MessageFields.photoURL], let URL = URL(string: photoURL),
+                let data = try? Data(contentsOf: URL) {
+                cell.imageView?.image = UIImage(data: data)
+            }
         }
+        
         return cell
     }
     
